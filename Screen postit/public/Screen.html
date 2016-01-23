@@ -1,0 +1,247 @@
+
+<script src="http://code.jquery.com/jquery-2.2.0.min.js"></script>
+<style>
+    body {
+        background: #323232;
+    }
+    
+    .post-it-note {
+        display: none;
+        position: absolute;
+        width: 50px;
+        min-width: 13em;
+    }
+    
+    .post-it-note{
+        font-family: helvetica;
+        font-size: 1.5em;
+        font-weight: bold;
+    }
+    
+    .post-it-note {
+        padding: 1em;
+        background: #ffd707;
+        position: relative;
+        min-height: 1em;
+    }
+    
+    .circular img {
+        width: 20px;
+        height: 20px;
+        border-radius: 10px;
+        -webkit-border-radius: 10px;
+        -moz-border-radius: 10px;
+    }
+    
+    .circular img {
+        opacity: 1;
+        filter: alpha(opacity=0);
+        width: 20px;
+    }
+</style>
+
+<div id="postittemplate" >
+    <p class="p">
+
+    </p>
+</div>
+
+<div id='player' class='player' style=" position:absolute;display:none">
+    <div class="circular"><img src="face/0.jpg" alt="" /></div>
+</div>
+
+<script src="https://cdn.socket.io/socket.io-1.4.3.js"></script>
+
+<script>
+    localStorage.debug = 'socket.io-client:s*';
+
+var borderWidth = 4;
+var size = 20;
+var grid = [];
+var divPlayer = document.getElementById("player");
+var players = {};
+
+socket = io('http://localhost:3001',{transports: ['websocket']});
+
+socket.emit('BoardInfo?',"");
+
+socket.on('BoardInfo', function(data){
+    socket.emit('PlayerInfo?',"");
+}); 
+
+socket.on('PlayerInfo', function(data){
+    for (var player in data) {
+        var key = data[player].id.toString();
+        if(!(key in players)){
+            players[key] = CreatePlayer();
+            var divCurrent = players[key];
+            divCurrent.style.top = data[player].position.y * size - borderWidth/2 + 'px';
+            divCurrent.style.left = data[player].position.x * size - borderWidth/2 +  'px';
+        }
+    }
+});
+
+
+
+
+socket.on('create', function(action){
+   
+   var exist = false;
+   var p = action.d;
+   $(".post-it-note").each(function( key, value ) {
+        rec = value.getBoundingClientRect();
+        console.log(rec);
+        console.log(action);
+        if(rec.left <= p.x * size && p.x * size <= rec.left+ rec.width && rec.top<= p.y * size && p.y * size <= rec.top+rec.height ){
+            console.log("trouve");
+            exist= true;
+        }
+    });   
+    
+    if(!exist){
+    console.log("create");
+        var el =  document.getElementById("postittemplate").cloneNode(true);
+        el.className = "post-it-note";
+        el.style.display = "block";
+        el.style.position = "fixed";
+        el.style.top = action.d.y * size + 'px';
+        el.style.left = action.d.x * size +  'px';
+        document.body.appendChild(el);    
+    }
+});
+
+
+socket.on('abort', function(action){
+    // var el =  document.getElementById("p1");
+    // console.dir(action);
+    // el.innerText = action.d;
+    var p = action.position;
+   $(".post-it-note").each(function( key, value ) {
+        rec = value.getBoundingClientRect();
+        console.log(rec);
+        console.log(action);
+        if(rec.left <= p.x * size && p.x * size <= rec.left+ rec.width && rec.top<= p.y * size && p.y * size <= rec.top+rec.height ){
+            console.log("trouve");
+            $(value, "p").remove();
+        }
+    });   
+});
+
+socket.on('input', function(action){
+    // var el =  document.getElementById("p1");
+    // console.dir(action);
+    // el.innerText = action.d;
+    var p = action.position;
+   $(".post-it-note").each(function( key, value ) {
+        rec = value.getBoundingClientRect();
+        console.log(rec);
+        console.log(action);
+        if(rec.left <= p.x * size && p.x * size <= rec.left+ rec.width && rec.top<= p.y * size && p.y * size <= rec.top+rec.height ){
+            console.log("trouve");
+            $(value, "p").text(action.d);
+        }
+    });   
+});
+
+socket.on('moves', function(action){
+    for(var i = 0 ; i < action.length ; i++)
+    {
+        var exist = false;
+        var p = action[i].position;
+        $(".post-it-note").each(function( key, value ) {
+                rec = value.getBoundingClientRect();
+                console.log(rec);
+                console.log(action);
+                if(rec.left <= p.x * size && p.x * size <= rec.left+ rec.width && rec.top<= p.y * size && p.y * size <= rec.top+rec.height ){
+                    console.log("trouve");
+                    exist= true;
+                    socket.emit('text',{id: action[i].id , player: action.player ,text : $(value, "p").text() } );
+                }
+         });   
+        
+        
+        var pos = action[i].position;
+        var key = action[i].id.toString();
+        var divCurrent = players[key];
+        divCurrent.style.top = pos.y * size - borderWidth/2 + 'px';
+        divCurrent.style.left = pos.x * size - borderWidth/2 +  'px';
+    }
+}); 
+
+socket.on('join', function(id){
+    var key = id.toString();
+    if(!(key in players)){
+        players[key] = CreatePlayer();
+    }
+}); 
+
+socket.on('leave', function(id){
+    var key = id.toString();
+    if(key in players){
+        var div = players[key];
+        div.parentNode.removeChild(div);
+    }
+}); 
+
+function CreatePlayer()
+{
+    var div = divPlayer.cloneNode(true); 
+    div.style.borderWidth = borderWidth - borderWidth + 'px';
+    div.style.top = 0 * size - borderWidth /2 + 'px';
+    div.style.left = 0 * size - borderWidth /2 + 'px';
+    div.style.width = 6 * size - borderWidth + 'px';
+    div.style.height = 5 * size - borderWidth + 'px';
+    div.style.display = "inline";
+    div.style.borderColor = getRandomColor();
+    document.body.appendChild(div);
+    return div;
+}
+
+function getRandomColor() {
+    var letters = '0123456789ABCDEF'.split('');
+    var color = '#';
+    for (var i = 0; i < 6; i++ ) {
+        color += letters[Math.floor(Math.random() * 16)];
+    }
+    return color;
+}
+
+</script>
+
+
+<style>
+    body {
+        margin: 0px;
+    }
+    
+    .tile {
+        /*border-radius:30px;*/
+        transform-origin: left center center;
+        border-color: black;
+        border-style: solid;
+        border-width: 1px;
+        -ms-transform-origin: left center;
+        /* IE 9 */
+        -webkit-transform-origin: left center;
+        /* Safari and Chrome */
+        background: #efefef;
+        font-family: 'odin', 'msr500', Arial, 'DejaVu Sans', 'Liberation Sans', Freesans, sans-serif;
+        text-align: center;
+        -webkit-font-smoothing: antialiased;
+        font-smoothing: antialiased;
+        -webkit-tap-highlight-color: transparent;
+        font-size: 13px;
+        z-index: -1;
+    }
+    
+    .player {
+        display: block;
+        position: absolute;
+        border-color: red;
+        border-style: dashed;
+        z-index: 1;
+    }
+</style>
+
+
+<script src="//localhost:35729/livereload.js"></script>
